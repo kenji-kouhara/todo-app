@@ -189,12 +189,13 @@
     </div>
 
     <script>
-        const API_URL = 'api.php';
         const todoInput = document.getElementById('todoInput');
         const addBtn = document.getElementById('addBtn');
         const todoList = document.getElementById('todoList');
-        const loading = document.getElementById('loading');
         const errorMessage = document.getElementById('errorMessage');
+
+        // LocalStorageのキー
+        const STORAGE_KEY = 'todos';
 
         // エラーメッセージ表示
         function showError(message) {
@@ -205,27 +206,20 @@
             }, 5000);
         }
 
-        // TODOリストを取得
-        async function fetchTodos() {
-            try {
-                loading.style.display = 'block';
-                const response = await fetch(API_URL);
-                const result = await response.json();
+        // LocalStorageからTODOを取得
+        function getTodos() {
+            const todos = localStorage.getItem(STORAGE_KEY);
+            return todos ? JSON.parse(todos) : [];
+        }
 
-                if (result.success) {
-                    renderTodos(result.data);
-                } else {
-                    showError(result.error || 'データの取得に失敗しました');
-                }
-            } catch (error) {
-                showError('サーバーとの通信に失敗しました: ' + error.message);
-            } finally {
-                loading.style.display = 'none';
-            }
+        // LocalStorageにTODOを保存
+        function saveTodos(todos) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(todos));
         }
 
         // TODOリストを描画
-        function renderTodos(todos) {
+        function renderTodos() {
+            const todos = getTodos();
             todoList.innerHTML = '';
 
             if (todos.length === 0) {
@@ -233,14 +227,17 @@
                 return;
             }
 
+            // 作成日時の降順でソート
+            todos.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
             todos.forEach(todo => {
                 const li = document.createElement('li');
-                li.className = `todo-item ${todo.completed == 1 ? 'completed' : ''}`;
+                li.className = `todo-item ${todo.completed ? 'completed' : ''}`;
 
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
-                checkbox.checked = todo.completed == 1;
-                checkbox.addEventListener('change', () => toggleTodo(todo.id, checkbox.checked));
+                checkbox.checked = todo.completed;
+                checkbox.addEventListener('change', () => toggleTodo(todo.id));
 
                 const span = document.createElement('span');
                 span.textContent = todo.title;
@@ -258,7 +255,7 @@
         }
 
         // TODOを追加
-        async function addTodo() {
+        function addTodo() {
             const title = todoInput.value.trim();
 
             if (!title) {
@@ -266,76 +263,42 @@
                 return;
             }
 
-            try {
-                const response = await fetch(API_URL, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ title }),
-                });
+            const todos = getTodos();
+            const newTodo = {
+                id: Date.now(),
+                title: title,
+                completed: false,
+                created_at: new Date().toISOString()
+            };
 
-                const result = await response.json();
-
-                if (result.success) {
-                    todoInput.value = '';
-                    fetchTodos();
-                } else {
-                    showError(result.error || 'TODOの追加に失敗しました');
-                }
-            } catch (error) {
-                showError('サーバーとの通信に失敗しました: ' + error.message);
-            }
+            todos.push(newTodo);
+            saveTodos(todos);
+            todoInput.value = '';
+            renderTodos();
         }
 
         // TODOの完了状態を切り替え
-        async function toggleTodo(id, completed) {
-            try {
-                const response = await fetch(API_URL, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ id, completed }),
-                });
+        function toggleTodo(id) {
+            const todos = getTodos();
+            const todo = todos.find(t => t.id === id);
 
-                const result = await response.json();
-
-                if (result.success) {
-                    fetchTodos();
-                } else {
-                    showError(result.error || '更新に失敗しました');
-                }
-            } catch (error) {
-                showError('サーバーとの通信に失敗しました: ' + error.message);
+            if (todo) {
+                todo.completed = !todo.completed;
+                saveTodos(todos);
+                renderTodos();
             }
         }
 
         // TODOを削除
-        async function deleteTodo(id) {
+        function deleteTodo(id) {
             if (!confirm('このTODOを削除しますか？')) {
                 return;
             }
 
-            try {
-                const response = await fetch(API_URL, {
-                    method: 'DELETE',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ id }),
-                });
-
-                const result = await response.json();
-
-                if (result.success) {
-                    fetchTodos();
-                } else {
-                    showError(result.error || '削除に失敗しました');
-                }
-            } catch (error) {
-                showError('サーバーとの通信に失敗しました: ' + error.message);
-            }
+            const todos = getTodos();
+            const filteredTodos = todos.filter(t => t.id !== id);
+            saveTodos(filteredTodos);
+            renderTodos();
         }
 
         // イベントリスナー
@@ -347,7 +310,7 @@
         });
 
         // 初期読み込み
-        fetchTodos();
+        renderTodos();
     </script>
 </body>
 </html>
